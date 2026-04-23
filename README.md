@@ -4,43 +4,88 @@ Projeto de referência em **C# / ASP.NET Core 8** que demonstra a **Arquitetura 
 
 ---
 
-## Diagrama da Arquitetura
+## Diagrama da Arquitetura Hexagonal
 
 ```mermaid
-graph LR
-    Client(["👤 Cliente\nHTTP"])
+%%{init: {'theme': 'dark', 'flowchart': {'curve': 'basis'}}}%%
+flowchart LR
 
-    subgraph PrimaryAdapters["Adaptadores Primários (Inbound)"]
-        direction TB
-        Controller["UsersController\nGET · POST · PUT · DELETE /api/users"]
+    %% ── ATOR EXTERNO ──────────────────────────────────────────────────────
+    Client(["👤  Cliente\n     HTTP"])
+
+    %% ── ADAPTADOR PRIMÁRIO  ❰ Lado Condutor — Inbound ❱ ─────────────────
+    subgraph PRI["🔵  ADAPTADOR PRIMÁRIO"]
+        CTRL{{"UsersController\nPOST · GET\nPUT · DELETE\n/api/users"}}
     end
 
-    subgraph Core["⬡  N Ú C L E O  ⬡"]
+    %% ── HEXÁGONO — NÚCLEO ────────────────────────────────────────────────
+    subgraph HEX["⬡ ─────────────  N Ú C L E O  ───────────── ⬡"]
         direction TB
-        subgraph Domain["Domain"]
-            Ports["Portas (Ports)\nIUserService\nIUserRepository\nIEmailService"]
-            Entity["User (Entidade)"]
-            VO["EmailVo · NameVo\n(Value Objects)"]
-            Exc["InvalidEmailException\nInvalidNameException"]
+
+        subgraph APP["Application Layer"]
+            SVC{{"UserServiceManager\n〈 implements IUserService 〉"}}
         end
-        subgraph Application["Application"]
-            AppSvc["UserServiceManager\nimplements IUserService"]
+
+        subgraph PORTS["Ports  —  Domain Layer"]
+            direction LR
+            PSVC{{"⬡  IUserService"}}
+            PREPO{{"⬡  IUserRepository"}}
+            PEMAIL{{"⬡  IEmailService"}}
+        end
+
+        subgraph DOM["Domain Layer"]
+            direction LR
+            ENT(["User\n(Entidade)"])
+            VO(["EmailVo · NameVo\n(Value Objects)"])
+            EXC(["InvalidEmailException\nInvalidNameException"])
         end
     end
 
-    subgraph SecondaryAdapters["Adaptadores Secundários (Outbound)"]
+    %% ── ADAPTADORES SECUNDÁRIOS  ❰ Lado Conduzido — Outbound ❱ ──────────
+    subgraph SEC["🟠  ADAPTADORES SECUNDÁRIOS"]
         direction TB
-        Repo["UserRepository\nEF Core InMemory"]
-        EmailSvc["FakeEmailAdapter\nIEmailService"]
+        REPO["🗄  UserRepository\nEF Core · InMemory\nInfra.Data"]
+        MAIL["📧  FakeEmailAdapter\nInfra.Email"]
     end
 
-    Client -->|"HTTP Request"| Controller
-    Controller -->|"IUserService"| AppSvc
-    AppSvc -->|"IUserRepository"| Repo
-    AppSvc -->|"IEmailService"| EmailSvc
-    AppSvc -. "opera em" .-> Entity
-    AppSvc -. "valida via" .-> VO
+    %% ── FLUXO DE COMUNICAÇÃO ─────────────────────────────────────────────
+    Client    --   "HTTP Request"    -->  CTRL
+    CTRL      --   "▶  usa"         -->  PSVC
+    PSVC      --   "implementa"     -->  SVC
+    SVC       --   "usa  ▶"         -->  PREPO
+    SVC       --   "usa  ▶"         -->  PEMAIL
+    PREPO     --   "implementa"     -->  REPO
+    PEMAIL    --   "implementa"     -->  MAIL
+    SVC       -. "opera em"     .-> ENT
+    SVC       -. "valida com"   .-> VO
+    SVC       -. "lança"        .-> EXC
+
+    %% ── ESTILOS POR CAMADA ───────────────────────────────────────────────
+    classDef coreStyle   fill:#0f3460,stroke:#e94560,color:#ffffff,stroke-width:3px
+    classDef portStyle   fill:#1b4332,stroke:#52b788,color:#ffffff,stroke-width:2px
+    classDef priStyle    fill:#2d1b4e,stroke:#c77dff,color:#ffffff,stroke-width:2px
+    classDef secStyle    fill:#1a2744,stroke:#f4a261,color:#ffffff,stroke-width:2px
+    classDef entityStyle fill:#0d1117,stroke:#a8dadc,color:#a8dadc,stroke-width:1px
+    classDef clientStyle fill:#3d0000,stroke:#e63946,color:#ffffff,stroke-width:2px
+
+    class SVC coreStyle
+    class PSVC,PREPO,PEMAIL portStyle
+    class CTRL priStyle
+    class REPO,MAIL secStyle
+    class ENT,VO,EXC entityStyle
+    class Client clientStyle
 ```
+
+### Legenda de cores
+
+| Cor | Camada | Papel na Arquitetura |
+|---|---|---|
+| 🔴 Vermelho | Cliente HTTP | Ator externo que dispara requisições |
+| 🟣 Roxo | Adaptador Primário | Traduz HTTP → chamada ao núcleo (`UsersController`) |
+| 🟢 Verde | Portas (Ports) | Interfaces que isolam o núcleo do mundo externo |
+| 🔵 Azul | Núcleo / Application | Orquestra a lógica de negócio (`UserServiceManager`) |
+| ⬛ Escuro | Domain | Entidades, Value Objects e Exceções puras |
+| 🟠 Laranja | Adaptadores Secundários | Implementam as portas de saída (dados e e-mail) |
 
 ---
 
